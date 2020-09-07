@@ -141,15 +141,12 @@ impl Emulator {
 
     pub fn run(&mut self) -> Result<(), VmExit> {
         loop {
-            // Read 3 bytes at memory address PC
-            print!("{:04x}\n", self.regs.pc);
-            if self.regs.pc > 0x110 {
-                panic!("STOP");
-            }
             let instr = self.memory.read_byte(self.regs.pc)?;
 
+            // print!("Executing instruction at 0x{:04x}\n", self.regs.pc);
+
             // Decode the instruction and return number of bytes read
-            let (bytes_read, machine_cycles) = match instr {
+            let (bytes_read, _machine_cycles) = match instr {
                 0x00 => (1, 1), // NOP
                 0x01 => { // LD BC, d16
                     self.regs.set_bc(self.memory.read_word(self.regs.pc + 1)?);
@@ -172,7 +169,8 @@ impl Emulator {
                     (1, 1)
                 },
                 0x06 => { // LD B, d8
-                    self.regs.b = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.b = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 },
                 0x07 => { // RLCA
@@ -208,7 +206,8 @@ impl Emulator {
                     (1, 1)
                 },
                 0x0E => { // LD C, d8
-                    self.regs.c = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.c = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 },
                 0x0F => { // RRCA
@@ -243,7 +242,8 @@ impl Emulator {
                     (1, 1)
                 }
                 0x16 => { // LD D, d8
-                    self.regs.d = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.d = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 }
                 0x17 => { // RLA
@@ -256,7 +256,8 @@ impl Emulator {
                 }
                 0x18 => { // JR r8
                     let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                    self.regs.pc += tmp as u16;
+                    self.regs.pc =
+                        self.regs.pc.wrapping_add(tmp as i8 as u16);
                     (2, 3)
                 }
                 0x19 => { // ADD HL, DE
@@ -280,7 +281,8 @@ impl Emulator {
                     (1, 1)
                 }
                 0x1E => { // LD E, d8
-                    self.regs.e = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.e = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 }
                 0x1F => { // RRA
@@ -296,7 +298,8 @@ impl Emulator {
                         (2, 2)
                     } else {
                         let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                        self.regs.pc += !tmp as u16;
+                        self.regs.pc =
+                            self.regs.pc.wrapping_add(tmp as i8 as u16);
                         (2, 3)
                     }
                 }
@@ -322,20 +325,21 @@ impl Emulator {
                     (1, 1)
                 }
                 0x26 => { // LD H, d8
-                    self.regs.h = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.h = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 }
                 0x27 => { // DAA
-                    self.regs.set_flag(CpuFlag::H, false);
+                    panic!("DAA :o");
                     // TODO handle this instruction
-                    (1, 1)
                 }
                 0x28 => { // JR Z,r8
                     if !self.regs.flag(CpuFlag::Z) {
                         (2, 2)
                     } else {
                         let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                        self.regs.pc += tmp as u16;
+                        self.regs.pc =
+                            self.regs.pc.wrapping_add(tmp as i8 as u16);
                         (2, 3)
                     }
                 }
@@ -361,7 +365,8 @@ impl Emulator {
                     (1, 1)
                 }
                 0x2E => { // LD L, d8
-                    self.regs.l = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.l = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 }
                 0x2F => { // CPL
@@ -375,7 +380,8 @@ impl Emulator {
                         (2, 2)
                     } else {
                         let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                        self.regs.pc += tmp as u16;
+                        self.regs.pc =
+                            self.regs.pc.wrapping_add(tmp as i8 as u16);
                         (2, 3)
                     }
                 }
@@ -405,7 +411,8 @@ impl Emulator {
                     (1, 3)
                 }
                 0x36 => { // LD (HL), d8
-                    let tmp = self.memory.read_byte(self.regs.pc + 1)?;
+                    let tmp = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     self.memory.write_byte(self.regs.hl(), tmp)?;
                     (2, 3)
                 }
@@ -420,7 +427,8 @@ impl Emulator {
                         (2, 2)
                     } else {
                         let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                        self.regs.pc += tmp as u16;
+                        self.regs.pc =
+                            self.regs.pc.wrapping_add(tmp as i8 as u16);
                         (2, 3)
                     }
                 }
@@ -446,7 +454,8 @@ impl Emulator {
                     (1, 1)
                 }
                 0x3E => { // LD A, d8
-                    self.regs.a = self.memory.read_byte(self.regs.pc + 1)?;
+                    self.regs.a = self.memory.read_byte(
+                        self.regs.pc + 1)?;
                     (2, 2)
                 }
                 0x3F => { // CCF
@@ -554,7 +563,9 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 6)
+                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        (0, 6)
                     }
                 }
                 0xC5 => { // PUSH BC
@@ -662,15 +673,16 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 6)
+                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        (0, 6)
                     }
                 }
                 0xCD => { // CALL a16
-                    self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                    print!("{:04x}debug\n", self.regs.pc);
-                    self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
                     self.regs.sp = self.regs.sp.wrapping_sub(2);
-                    (3, 6)
+                    self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                    self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
+                    (0, 6)
                 }
                 0xCE => { // ADC A,d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
@@ -707,7 +719,9 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 6)
+                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        (0, 6)
                     }
                 }
                 0xD5 => { // PUSH DE
@@ -749,7 +763,9 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 6)
+                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        (0, 6)
                     }
                 }
                 0xDE => { // SBC A,d8
@@ -764,7 +780,6 @@ impl Emulator {
                 0xE0 => { // LDH (a8),A
                     let address = self.memory
                         .read_byte(self.regs.pc+1)? as u16 | 0xFF00;
-                    //print!("{:04x}\n", address);
                     self.memory.write_byte(address, self.regs.a)?;
                     (2, 3)
                 }
@@ -832,7 +847,7 @@ impl Emulator {
                 0xF0 => { // LDH A, (a8)
                     let tmp = self.memory.read_byte(self.regs.pc + 1)?;
                     self.regs.a = self.memory.read_byte(tmp as u16 | 0xFF00)?;
-                    (1, 1)
+                    (2, 3)
                 }
                 0xF1 => { // POP AF
                     let af = self.pop16()?;
@@ -902,7 +917,7 @@ impl Emulator {
                     self.regs.pc = 0x38;
                     (1, 4)
                 }
-                _ => unreachable!("Unkown instruction"),
+                _ => unreachable!("Unknown instruction {:02x}", instr),
             };
             
             self.regs.pc += bytes_read;
@@ -912,8 +927,10 @@ impl Emulator {
     fn alu_inc8(&mut self, val: u8) -> u8 {
         let res = val.wrapping_add(1);
         self.regs.set_flag(CpuFlag::N, false);
-        if self.regs.b == 0 {
+        if res == 0 {
             self.regs.set_flag(CpuFlag::Z, true);
+        } else {
+            self.regs.set_flag(CpuFlag::Z, false);
         }
         if res & 0b11111 == 0b10000 {
             self.regs.set_flag(CpuFlag::H, true);
@@ -924,9 +941,11 @@ impl Emulator {
     fn alu_dec8(&mut self, val: u8) -> u8 {
         let res = val.wrapping_sub(1);
         self.regs.set_flag(CpuFlag::N, true);
-        if self.regs.b == 0 {
+        if res == 0 {
             self.regs.set_flag(CpuFlag::Z, true);
-        }
+        } else {
+            self.regs.set_flag(CpuFlag::Z, false);
+        } 
         if res & 0b11111 == 0b01111 {
             self.regs.set_flag(CpuFlag::H, true);
         }
@@ -1063,23 +1082,6 @@ impl Emulator {
             self.regs.set_flag(CpuFlag::Z, false);
         }
     }
-
-    fn alu_rlc(&self, &mut val: &mut u8) {
-        // TODO implement rlc
-        // val = val << 1;
-    }
-
-    /*
-    fn alu_rl(&mut self, val: &u8) {
-        let carry = (0x80 & *val) == 0x80;
-        *val = *val << 1;
-        self.regs.clear_flags();
-        self.regs.set_flag(CpuFlag::C, carry);
-        if (*val == 0) {
-            self.regs.set_flag(CpuFlag::Z, true);
-        }
-    }
-    */
 
     fn alu_rl<'a, F: FnMut(&mut Emulator) -> &mut u8>
         (&'a  mut self, mut callback: F) {

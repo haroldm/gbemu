@@ -1,5 +1,7 @@
 pub mod emulator;
 pub mod mmu;
+pub mod gpu;
+pub mod renderer;
 
 use emulator::Emulator;
 

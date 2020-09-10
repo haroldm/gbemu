@@ -7,7 +7,7 @@ Currently only the GB bootrom is known to run.
 ## Resources
 
 ### Opcodes:
-* https://pastraiser.com/cpu/gameboy/gameboy_opcodes.html
+* https://pastraiser.com/cpu/gameboy/gameboy_opcodes.html (errors included)
 * https://rednex.github.io/rgbds/gbz80.7.html
 
 ### Docs:

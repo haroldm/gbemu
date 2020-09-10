@@ -1,4 +1,5 @@
 use crate::emulator::VmExit;
+use crate::gpu::Gpu;
 
 static NINTENDO_LOGO: [u8; 76] = [
     // Logo
@@ -18,8 +19,7 @@ pub struct Mmu {
     bootrom_lock: bool,
     ram: Vec<u8>,
     zero_page_ram: Vec<u8>,
-    graphics_ram: Vec<u8>,
-    scroll_y: u8,
+    pub gpu: Gpu,
 }
 
 impl Mmu {
@@ -31,8 +31,7 @@ impl Mmu {
             rom: vec![0; 32768],
             ram: vec![0; 8192],
             zero_page_ram: vec![0; 128],
-            graphics_ram: vec![0; 8192],
-            scroll_y: 0,
+            gpu: Gpu::new(),            
         }
     }
 
@@ -49,7 +48,7 @@ impl Mmu {
                 }
                 Ok(self.rom[address])
             }
-            0x8000..=0x9FFF => Ok(self.graphics_ram[address - 0x8000]),
+            0x8000..=0x9FFF => Ok(self.gpu.graphics_ram[address - 0x8000]),
             0xC000..=0xDFFF => Ok(self.ram[address - 0xC000]),
             0xE000..=0xFDFF => Ok(self.ram[address - 0xE000]),
             0xFE00..=0xFE9F => panic!("sprite data"),
@@ -70,7 +69,8 @@ impl Mmu {
         match address {
             // 0x0000..=0x3FFF => Ok(()),
             0x8000..=0x9FFF => {
-                self.graphics_ram[address - 0x8000] = val;
+                //print!("Writing 0x{:02x} at 0x{:04x}\n", val, address);
+                self.gpu.graphics_ram[address - 0x8000] = val;
                 Ok(())
             },
             0xC000..=0xDFFF => {
@@ -108,7 +108,16 @@ impl Mmu {
             0xFF11 => { // NR11 - Channel 1 Sound length/Wave pattern duty (R/W)
                 Ok(())
             }
+            0xFF12 => { // NR12 - Channel 1 Volume Envelope (R/W)
+                Ok(())
+            }
             0xFF13 => { // NR13 - Channel 1 Frequency lo (Write Only)
+                Ok(())
+            }
+            0xFF14 => { // NR14 - Channel 1 Frequency hi (R/W)
+                Ok(())
+            }
+            0xFF24 => { // NR50 - Channel control / ON-OFF / Volume (R/W)
                 Ok(())
             }
             0xFF25 => { // NR51 - Selection of Sound output terminal (R/W)
@@ -118,13 +127,15 @@ impl Mmu {
                  Ok(())
             }
             0xFF40 => { // LCDC - LCD Control (R/W)
+                // print!("LCD Control = 0b{:08b}\n", val);
                 Ok(())
             }
             0xFF42 => { // SCY - Scroll Y (R/W)
-                self.scroll_y = val;
+                self.gpu.set_scroll_y(val);
                 Ok(())
             }
             0xFF47 => { // BGP - BG Palette Data (R/W) - Non CGB Mode Only
+                print!("BG Palette Data = 0b{:08b}\n", val);
                 Ok(())
             }
             0xFF50 => { // Boot ROM lock register
@@ -142,10 +153,10 @@ impl Mmu {
     fn handle_io_read(&mut self, address: usize) -> Result<u8, VmExit> {
         match address {
             0xFF42 => { // SCY - Scroll Y (R/W)
-                Ok(self.scroll_y)
+                Ok(self.gpu.get_scroll_y())
             }
             0xFF44 => { // LY - LCDC Y-Coordinate (R)
-                Ok(144)
+                Ok(self.gpu.line)
             }
             0xFF50 => { // Boot ROM lock register
                 Ok(if self.bootrom_lock { 0 } else { 1 })

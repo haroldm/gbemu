@@ -1,3 +1,4 @@
+use std::{thread, time};
 use crate::mmu::Mmu;
 
 /// Function that makes a closure use same lifetime elision rules as a function
@@ -146,7 +147,7 @@ impl Emulator {
             // print!("Executing instruction at 0x{:04x}\n", self.regs.pc);
 
             // Decode the instruction and return number of bytes read
-            let (bytes_read, _machine_cycles) = match instr {
+            let (bytes_read, machine_cycles) = match instr {
                 0x00 => (1, 1), // NOP
                 0x01 => { // LD BC, d16
                     self.regs.set_bc(self.memory.read_word(self.regs.pc + 1)?);
@@ -247,11 +248,8 @@ impl Emulator {
                     (2, 2)
                 }
                 0x17 => { // RLA
-                    let tmp = self.regs.a;
-                    let carry = (0x80 & tmp) == 0x80;
-                    self.regs.a = tmp << 1;
-                    self.regs.clear_flags();
-                    self.regs.set_flag(CpuFlag::C, carry);
+                    self.alu_rl(|emu: &mut Emulator| &mut emu.regs.a);
+                    self.regs.set_flag(CpuFlag::Z, false);
                     (1, 1)
                 }
                 0x18 => { // JR r8
@@ -562,8 +560,7 @@ impl Emulator {
                     if self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.push16(self.regs.pc+2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
@@ -672,15 +669,13 @@ impl Emulator {
                     if !self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.push16(self.regs.pc+2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
                 }
                 0xCD => { // CALL a16
-                    self.regs.sp = self.regs.sp.wrapping_sub(2);
-                    self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                    self.push16(self.regs.pc+2);
                     self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                     (0, 6)
                 }
@@ -718,8 +713,7 @@ impl Emulator {
                     if self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.push16(self.regs.pc+2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
@@ -762,8 +756,7 @@ impl Emulator {
                     if !self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                        self.memory.write_word(self.regs.sp, self.regs.pc+3)?;
+                        self.push16(self.regs.pc+2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
@@ -791,7 +784,7 @@ impl Emulator {
                 0xE2 => { // LD (C), A
                     let address = self.regs.c as u16 | 0xFF00;
                     self.memory.write_byte(address, self.regs.a)?;
-                    (2, 2)
+                    (1, 2)
                 }
                 0xE5 => { // PUSH HL
                     self.push16(self.regs.hl());
@@ -857,7 +850,7 @@ impl Emulator {
                 0xF2 => { // LD A,(C)
                     let address = self.regs.c as u16 | 0xFF00;
                     self.regs.a = self.memory.read_byte(address)?;
-                    (2, 2)
+                    (1, 2)
                 }
                 0xF3 => { // DI
                     // TODO DI
@@ -921,6 +914,11 @@ impl Emulator {
             };
             
             self.regs.pc += bytes_read;
+
+            self.memory.gpu.step(machine_cycles*4);
+
+            // sleep (temporary hack)
+            // thread::sleep(time::Duration::from_nanos(238*machine_cycles as u64));
         }
     }
 
@@ -1084,14 +1082,15 @@ impl Emulator {
     }
 
     fn alu_rl<'a, F: FnMut(&mut Emulator) -> &mut u8>
-        (&'a  mut self, mut callback: F) {
+        (&'a  mut self, mut get_reg: F) {
         let zero_flag: bool;
+        let old_carry = if self.regs.flag(CpuFlag::C) { 1 } else { 0 };
         let carry: bool;
         {
-            let val = callback(self);
-            zero_flag = if *val == 0 { true } else { false };
-            *val = *val << 1;
+            let val = get_reg(self);
             carry = (0x80 & *val) == 0x80;
+            *val = (*val << 1) | old_carry;
+            zero_flag = if *val == 0 { true } else { false };
         }
         self.regs.clear_flags();
         self.regs.set_flag(CpuFlag::C, carry);

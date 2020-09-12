@@ -1,4 +1,4 @@
-use std::{thread, time};
+// use std::{thread, time};
 use crate::mmu::Mmu;
 
 /// Function that makes a closure use same lifetime elision rules as a function
@@ -601,7 +601,7 @@ impl Emulator {
                 0xCB => { // PREFIX CB
                     let subinstr = self.memory.read_byte(self.regs.pc + 1)?;
 
-                    let closure_src = match subinstr & 0x7 {
+                    let get_src_reg = match subinstr & 0x7 {
                         0x0 => identity(|emu: &mut Emulator| &mut emu.regs.b),
                         0x1 => identity(|emu: &mut Emulator| &mut emu.regs.c),
                         0x2 => identity(|emu: &mut Emulator| &mut emu.regs.d),
@@ -619,10 +619,12 @@ impl Emulator {
                     match subinstr & 0b11111000 {
                         // 0x00 => self.alu_rlc(src),
                         0x78 => {
-                            let tmp = *closure_src(self);
+                            let tmp = *get_src_reg(self);
                             self.bit(tmp, 7)
                         },
-                        0x10 => self.alu_rl(closure_src),
+                        0x10 => self.alu_rl(get_src_reg),
+                        0x30 => self.alu_swap(get_src_reg),
+                        0x38 => self.alu_srl(get_src_reg),
 
                         /*
                         0x08 => rrc,
@@ -630,8 +632,6 @@ impl Emulator {
                         0x18 => rr,
                         0x20 => sla,
                         0x28 => sra,
-                        0x30 => swap,
-                        0x38 => srl,
                         0x40 => bit0,
                         0x48 => bit1,
                         0x50 => bit2,
@@ -1090,6 +1090,34 @@ impl Emulator {
             let val = get_reg(self);
             carry = (0x80 & *val) == 0x80;
             *val = (*val << 1) | old_carry;
+            zero_flag = if *val == 0 { true } else { false };
+        }
+        self.regs.clear_flags();
+        self.regs.set_flag(CpuFlag::C, carry);
+        self.regs.set_flag(CpuFlag::Z, zero_flag);
+    }
+
+    fn alu_swap<'a, F: FnMut(&mut Emulator) -> &mut u8>
+        (&'a  mut self, mut get_reg: F) {
+        let zero_flag: bool;
+        let val = get_reg(self);
+        {
+            let lower = *val & 0x0f;
+            *val = (*val >> 4) | (lower << 4);
+            zero_flag = if *val == 0 { true } else { false };
+        }
+        self.regs.clear_flags();
+        self.regs.set_flag(CpuFlag::Z, zero_flag);
+    }
+    
+    fn alu_srl<'a, F: FnMut(&mut Emulator) -> &mut u8>
+        (&'a  mut self, mut get_reg: F) {
+        let zero_flag: bool;
+        let carry: bool;
+        {
+            let val = get_reg(self);
+            carry = (0x01 & *val) == 0x01;
+            *val = *val >> 1;
             zero_flag = if *val == 0 { true } else { false };
         }
         self.regs.clear_flags();

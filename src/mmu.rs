@@ -1,18 +1,6 @@
 use crate::emulator::VmExit;
 use crate::gpu::Gpu;
 
-static NINTENDO_LOGO: [u8; 76] = [
-    // Logo
-    0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B, 0x03, 0x73, 0x00, 0x83,
-    0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E,
-    0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63,
-    0x6E, 0x0E, 0xEC, 0xCC, 0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E,
-    // Game title, checksum to 0xe7
-    0xe7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00
-];
-
 pub struct Mmu {
     rom: Vec<u8>,
     bootrom: Vec <u8>,
@@ -35,16 +23,16 @@ impl Mmu {
         }
     }
 
+    pub fn load_rom(&mut self, path: &str) {
+        self.rom = std::fs::read(path).ok().unwrap();
+    }
+
     pub fn read_byte(&mut self, address: u16) -> Result<u8, VmExit> {
         let address = address as usize;
         match address {
             0x0000..=0x7FFF => {
                 if self.bootrom_lock == true && address <= 0xFF {
                     return Ok(self.bootrom[address])
-                }
-                // print!("Reading 0x{:04x}\n", address);
-                if address >= 0x104 && address <= 0x14d {
-                    return Ok(NINTENDO_LOGO[address - 0x104])
                 }
                 Ok(self.rom[address])
             }
@@ -142,7 +130,6 @@ impl Mmu {
                 if val & 0x01 == 0x01
                     && self.read_byte(address as u16)? & 0x01 == 0 {
                     self.bootrom_lock = false;
-                    panic!("Switching out of bootrom");
                 }
                 Ok(())
             }

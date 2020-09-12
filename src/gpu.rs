@@ -1,5 +1,9 @@
-use crate::renderer::Renderer;
-use std::{thread, time};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex, Condvar};
+
+pub const WIDTH: u32 = 160;
+pub const HEIGHT: u32 = 144;
+pub const FRAME_LENGTH: usize = WIDTH as usize * HEIGHT as usize * 4;
 
 enum GpuMode {
     /// Horizontal blanking
@@ -16,7 +20,11 @@ enum GpuMode {
 }
 
 pub struct Gpu {
-    renderer: Renderer,
+    /// Channel to send pixel data in
+    channel: Option<Sender<Box<[u8; FRAME_LENGTH]>>>,
+    pair: Option<Arc<(Mutex<bool>, Condvar)>>,
+
+    frame: [u8; FRAME_LENGTH],
     mode: GpuMode,
     modeclock: usize,
     pub line: u8,
@@ -28,7 +36,10 @@ pub struct Gpu {
 impl Gpu {
     pub fn new() -> Gpu {
         Gpu {
-            renderer: Renderer::new(),
+            channel: None,
+            pair: None,
+
+            frame: [0; WIDTH as usize * HEIGHT as usize * 4],
             mode: GpuMode::HBlank,
             modeclock: 0,
             line: 0,
@@ -36,6 +47,12 @@ impl Gpu {
             scroll_x: 0,
             scroll_y: 0,
         }
+    }
+
+    pub fn sync(&mut self, channel: Sender<Box<[u8; FRAME_LENGTH]>>,
+        pair: Arc<(Mutex<bool>, Condvar)>) {
+        self.pair = Some(pair);
+        self.channel = Some(channel);
     }
 
     pub fn step(&mut self, cycle_nb: usize) { 
@@ -62,11 +79,16 @@ impl Gpu {
 
                     if self.line == 143 {
                         self.mode = GpuMode::VBlank;
+                        // Block thread until previous frame is rendered
+                        if let Some(pair) = &self.pair {
+                            let (lock, cvar) = &**pair;
+                            let mut drawn = lock.lock().unwrap();
+                            while !*drawn {
+                                drawn = cvar.wait(drawn).unwrap();
+                            }
+                        }
                         // Render full buffer
-                        // print!("render frame\n");
-                        // sleep (temporary hack)
-                        // thread::sleep(time::Duration::from_millis(16));
-                        self.renderer.render_frame();
+                        self.render_frame();
                     } else {
                         self.mode = GpuMode::OAMAccess;
                     }
@@ -87,7 +109,6 @@ impl Gpu {
 
     pub fn set_scroll_y(&mut self, val: u8) {
         self.scroll_y = val;
-        self.tile_map();
     }
 
     pub fn get_scroll_y(&self) -> u8 {
@@ -95,8 +116,6 @@ impl Gpu {
     }
 
     fn render_line(&mut self, line: u8) {
-        let mut texels: Vec<(u8, u8, u8)> = Vec::new();
-
         let position_y = line.wrapping_add(self.scroll_y) as usize;
         let tile_row = (position_y / 8) * 32;
         for pixel in 0..160u8 {
@@ -105,24 +124,29 @@ impl Gpu {
             let tile_address = 0x1800 + tile_row + tile_col;
             let tile_id = self.graphics_ram[tile_address] as usize;
             let tile_location = tile_id * 16;
-            let line = (position_y % 8) * 2;            
-            let data = self.graphics_ram[tile_location + line];
-            // if data != 0 {
-            //     print!("Reading 0x{:02x}\n", data);
-            // }
+            let line_in_tile = (position_y % 8) * 2;            
+            let data = self.graphics_ram[tile_location + line_in_tile];
             let color_bit = 7 - (position_x % 8);            
             let val = (data >> color_bit) & 0b1;
             let val = val * 255;
-            texels.push((val, val, val));
-        }
+            let val = [val, val, val, 0xff];
 
-        self.renderer.render_line(line as u32, texels);
+            let offset = (line as usize * WIDTH as usize + pixel as usize) * 4;
+            let pixel_in_frame = &mut self.frame[offset..offset+4];
+            pixel_in_frame.copy_from_slice(&val);
+        }
+       
     }
 
-    fn tile_map(&self) {
-        print!("\n");
-        for i in 0x8010..0x8020{
-            print!("{:02X} ", self.graphics_ram[i-0x8000]);
+    fn render_frame(&mut self) {
+        if let Some(sender) = &self.channel {
+            if let Some(pair) = &self.pair {
+                let (lock, _) = &**pair;
+                let mut drawn = lock.lock().unwrap();
+                *drawn = false;
+            }
+            let _ =  sender.send(Box::new(self.frame));
         }
     }
+
 }

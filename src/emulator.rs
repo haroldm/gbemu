@@ -10,7 +10,6 @@ where
     f
 }
 
-
 pub enum CpuFlag {
     C = 0b00010000,
     H = 0b00100000,
@@ -31,13 +30,13 @@ pub struct Registers {
 }
 
 impl Registers {
-    // TODO check endianness 
+    // TODO check endianness
 
     /// Get AF register
     pub fn af(&self) -> u16 {
         ((self.a as u16) << 8) | self.f as u16
     }
-    
+
     /// Get BC register
     pub fn bc(&self) -> u16 {
         ((self.b as u16) << 8) | self.c as u16
@@ -64,13 +63,13 @@ impl Registers {
         self.b = (val >> 8) as u8;
         self.c = (val & 0b11111111) as u8;
     }
-    
+
     /// Set DE register
     pub fn set_de(&mut self, val: u16) {
         self.d = (val >> 8) as u8;
         self.e = (val & 0b11111111) as u8;
     }
-    
+
     /// Set HL register
     pub fn set_hl(&mut self, val: u16) {
         self.h = (val >> 8) as u8;
@@ -80,14 +79,14 @@ impl Registers {
     pub fn set_flag(&mut self, flag: CpuFlag, val: bool) {
         self.f = match val {
             true => self.f | flag as u8,
-            false => self.f & !(flag as u8)
+            false => self.f & !(flag as u8),
         };
     }
 
     pub fn flag(&self, flag: CpuFlag) -> bool {
         match self.f & flag as u8 {
             0 => false,
-            _ => true
+            _ => true,
         }
     }
 
@@ -101,7 +100,7 @@ pub struct Emulator {
     pub memory: Mmu,
 
     /// All SM83 registers
-    regs: Registers    
+    regs: Registers,
 }
 
 /// Reasons why the VM exited
@@ -119,7 +118,6 @@ pub enum VmExit {
     /// VM exited after an out of bounds read
     OobRead,
 }
-
 
 impl Emulator {
     pub fn new() -> Emulator {
@@ -149,141 +147,167 @@ impl Emulator {
             // Decode the instruction and return number of bytes read
             let (bytes_read, machine_cycles) = match instr {
                 0x00 => (1, 1), // NOP
-                0x01 => { // LD BC, d16
+                0x01 => {
+                    // LD BC, d16
                     self.regs.set_bc(self.memory.read_word(self.regs.pc + 1)?);
                     (3, 3)
-                },
-                0x02 => { // LD (BC), A
+                }
+                0x02 => {
+                    // LD (BC), A
                     self.memory.write_byte(self.regs.bc(), self.regs.a)?;
                     (1, 2)
-                },
-                0x03 => { // INC BC
+                }
+                0x03 => {
+                    // INC BC
                     self.regs.set_bc(self.regs.bc().wrapping_add(1));
                     (1, 2)
-                },
-                0x04 => { // INC B
+                }
+                0x04 => {
+                    // INC B
                     self.regs.b = self.alu_inc8(self.regs.b);
                     (1, 1)
-                },
-                0x05 => { // DEC B
+                }
+                0x05 => {
+                    // DEC B
                     self.regs.b = self.alu_dec8(self.regs.b);
                     (1, 1)
-                },
-                0x06 => { // LD B, d8
-                    self.regs.b = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                }
+                0x06 => {
+                    // LD B, d8
+                    self.regs.b = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
-                },
-                0x07 => { // RLCA
+                }
+                0x07 => {
+                    // RLCA
                     let tmp = self.regs.a;
                     let carry = (0x80 & tmp) == 0x80;
                     self.regs.a = tmp << 1 | if carry { 1 } else { 0 };
                     self.regs.clear_flags();
                     self.regs.set_flag(CpuFlag::C, carry);
                     (1, 1)
-                },
-                0x08 => { // LD (a16), SP
+                }
+                0x08 => {
+                    // LD (a16), SP
                     self.regs.sp = self.memory.read_word(self.regs.pc + 1)?;
                     (3, 5)
-                },
-                0x09 => { // ADD HL, BC
+                }
+                0x09 => {
+                    // ADD HL, BC
                     self.alu_add_hl(self.regs.bc());
                     (1, 2)
-                },
-                0x0A => { // LD A, (BC)
+                }
+                0x0A => {
+                    // LD A, (BC)
                     self.regs.a = self.memory.read_byte(self.regs.bc())?;
                     (1, 2)
-                },
-                0x0B => { // DEC BC
+                }
+                0x0B => {
+                    // DEC BC
                     self.regs.set_bc(self.regs.bc().wrapping_sub(1));
                     (1, 2)
-                },
-                0x0C => { // INC C
+                }
+                0x0C => {
+                    // INC C
                     self.regs.c = self.alu_inc8(self.regs.c);
                     (1, 1)
-                },
-                0x0D => { // DEC C
+                }
+                0x0D => {
+                    // DEC C
                     self.regs.c = self.alu_dec8(self.regs.c);
                     (1, 1)
-                },
-                0x0E => { // LD C, d8
-                    self.regs.c = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                }
+                0x0E => {
+                    // LD C, d8
+                    self.regs.c = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
-                },
-                0x0F => { // RRCA
+                }
+                0x0F => {
+                    // RRCA
                     let tmp = self.regs.a;
                     let carry = (0x01 & tmp) == 0x01;
                     self.regs.a = tmp >> 1 | if carry { 0x80 } else { 0 };
                     self.regs.clear_flags();
                     self.regs.set_flag(CpuFlag::C, carry);
                     (1, 1)
-                },
-                0x10 => { // STOP
+                }
+                0x10 => {
+                    // STOP
                     return Err(VmExit::Stop);
                 }
-                0x11 => { // LD DE, d16
+                0x11 => {
+                    // LD DE, d16
                     self.regs.set_de(self.memory.read_word(self.regs.pc + 1)?);
                     (3, 3)
                 }
-                0x12 => { // LD (DE), A
+                0x12 => {
+                    // LD (DE), A
                     self.memory.write_byte(self.regs.de(), self.regs.a)?;
                     (1, 2)
                 }
-                0x13 => { // INC DE
+                0x13 => {
+                    // INC DE
                     self.regs.set_de(self.regs.de().wrapping_add(1));
                     (1, 2)
                 }
-                0x14 => { // INC D
+                0x14 => {
+                    // INC D
                     self.regs.d = self.alu_inc8(self.regs.d);
                     (1, 1)
                 }
-                0x15 => { // DEC D
+                0x15 => {
+                    // DEC D
                     self.regs.d = self.alu_dec8(self.regs.d);
                     (1, 1)
                 }
-                0x16 => { // LD D, d8
-                    self.regs.d = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x16 => {
+                    // LD D, d8
+                    self.regs.d = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
                 }
-                0x17 => { // RLA
+                0x17 => {
+                    // RLA
                     self.alu_rl(|emu: &mut Emulator| &mut emu.regs.a);
                     self.regs.set_flag(CpuFlag::Z, false);
                     (1, 1)
                 }
-                0x18 => { // JR r8
+                0x18 => {
+                    // JR r8
                     let tmp = self.memory.read_byte(self.regs.pc + 1)?;
-                    self.regs.pc =
-                        self.regs.pc.wrapping_add(tmp as i8 as u16);
+                    self.regs.pc = self.regs.pc.wrapping_add(tmp as i8 as u16);
                     (2, 3)
                 }
-                0x19 => { // ADD HL, DE
+                0x19 => {
+                    // ADD HL, DE
                     self.alu_add_hl(self.regs.de());
                     (1, 2)
                 }
-                0x1A => { // LD A, (DE)
+                0x1A => {
+                    // LD A, (DE)
                     self.regs.a = self.memory.read_byte(self.regs.de())?;
                     (1, 2)
                 }
-                0x1B => { // DEC DE
+                0x1B => {
+                    // DEC DE
                     self.regs.set_de(self.regs.de().wrapping_sub(1));
                     (1, 2)
                 }
-                0x1C => { // INC E
+                0x1C => {
+                    // INC E
                     self.regs.e = self.alu_inc8(self.regs.e);
                     (1, 1)
                 }
-                0x1D => { // DEC E
+                0x1D => {
+                    // DEC E
                     self.regs.e = self.alu_dec8(self.regs.e);
                     (1, 1)
                 }
-                0x1E => { // LD E, d8
-                    self.regs.e = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x1E => {
+                    // LD E, d8
+                    self.regs.e = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
                 }
-                0x1F => { // RRA
+                0x1F => {
+                    // RRA
                     let tmp = self.regs.a;
                     let carry = (0x01 & tmp) == 0x01;
                     self.regs.a = tmp >> 1;
@@ -291,7 +315,8 @@ impl Emulator {
                     self.regs.set_flag(CpuFlag::C, carry);
                     (1, 1)
                 }
-                0x20 => { // JR NZ,r8
+                0x20 => {
+                    // JR NZ,r8
                     if self.regs.flag(CpuFlag::Z) {
                         (2, 2)
                     } else {
@@ -301,37 +326,44 @@ impl Emulator {
                         (2, 3)
                     }
                 }
-                0x21 => { // LD HL, d16
+                0x21 => {
+                    // LD HL, d16
                     self.regs.set_hl(self.memory.read_word(self.regs.pc + 1)?);
                     (3, 3)
                 }
-                0x22 => { // LD (HL+), A
+                0x22 => {
+                    // LD (HL+), A
                     self.memory.write_byte(self.regs.hl(), self.regs.a)?;
                     self.regs.set_hl(self.regs.hl().wrapping_add(1));
                     (1, 2)
                 }
-                0x23 => { // INC HL
+                0x23 => {
+                    // INC HL
                     self.regs.set_hl(self.regs.hl().wrapping_add(1));
                     (1, 2)
                 }
-                0x24 => { // INC H
+                0x24 => {
+                    // INC H
                     self.regs.h = self.alu_inc8(self.regs.h);
                     (1, 1)
                 }
-                0x25 => { // DEC H
+                0x25 => {
+                    // DEC H
                     self.regs.h = self.alu_dec8(self.regs.h);
                     (1, 1)
                 }
-                0x26 => { // LD H, d8
-                    self.regs.h = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x26 => {
+                    // LD H, d8
+                    self.regs.h = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
                 }
-                0x27 => { // DAA
+                0x27 => {
+                    // DAA
                     panic!("DAA :o");
                     // TODO handle this instruction
                 }
-                0x28 => { // JR Z,r8
+                0x28 => {
+                    // JR Z,r8
                     if !self.regs.flag(CpuFlag::Z) {
                         (2, 2)
                     } else {
@@ -341,39 +373,46 @@ impl Emulator {
                         (2, 3)
                     }
                 }
-                0x29 => { // ADD HL, HL
+                0x29 => {
+                    // ADD HL, HL
                     self.alu_add_hl(self.regs.hl());
                     (1, 2)
                 }
-                0x2A => { // LD A, (HL+)
+                0x2A => {
+                    // LD A, (HL+)
                     self.regs.a = self.memory.read_byte(self.regs.hl())?;
                     self.regs.set_hl(self.regs.hl().wrapping_add(1));
                     (1, 2)
                 }
-                0x2B => { // DEC HL
+                0x2B => {
+                    // DEC HL
                     self.regs.set_hl(self.regs.hl().wrapping_sub(1));
                     (1, 2)
                 }
-                0x2C => { // INC L
+                0x2C => {
+                    // INC L
                     self.regs.l = self.alu_inc8(self.regs.l);
                     (1, 1)
                 }
-                0x2D => { // DEC L
+                0x2D => {
+                    // DEC L
                     self.regs.l = self.alu_dec8(self.regs.l);
                     (1, 1)
                 }
-                0x2E => { // LD L, d8
-                    self.regs.l = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x2E => {
+                    // LD L, d8
+                    self.regs.l = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
                 }
-                0x2F => { // CPL
+                0x2F => {
+                    // CPL
                     self.regs.a = !self.regs.a;
                     self.regs.set_flag(CpuFlag::N, true);
                     self.regs.set_flag(CpuFlag::H, true);
                     (1, 1)
                 }
-                0x30 => { // JR NC,r8
+                0x30 => {
+                    // JR NC,r8
                     if self.regs.flag(CpuFlag::C) {
                         (2, 2)
                     } else {
@@ -383,44 +422,51 @@ impl Emulator {
                         (2, 3)
                     }
                 }
-                0x31 => { // LD SP, d16
+                0x31 => {
+                    // LD SP, d16
                     self.regs.sp = self.memory.read_word(self.regs.pc + 1)?;
                     (3, 3)
                 }
-                0x32 => { // LD (HL-), A
+                0x32 => {
+                    // LD (HL-), A
                     self.memory.write_byte(self.regs.hl(), self.regs.a)?;
                     self.regs.set_hl(self.regs.hl().wrapping_sub(1));
                     (1, 2)
                 }
-                0x33 => {// INC SP
+                0x33 => {
+                    // INC SP
                     self.regs.sp = self.regs.sp.wrapping_add(1);
                     (1, 2)
                 }
-                0x34 => { // INC (HL)
+                0x34 => {
+                    // INC (HL)
                     let tmp = self.memory.read_byte(self.regs.hl())?;
                     let tmp = self.alu_inc8(tmp);
                     self.memory.write_byte(self.regs.hl(), tmp)?;
                     (1, 3)
                 }
-                0x35 => { // DEC (HL)
+                0x35 => {
+                    // DEC (HL)
                     let tmp = self.memory.read_byte(self.regs.hl())?;
                     let tmp = self.alu_dec8(tmp);
                     self.memory.write_byte(self.regs.hl(), tmp)?;
                     (1, 3)
                 }
-                0x36 => { // LD (HL), d8
-                    let tmp = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x36 => {
+                    // LD (HL), d8
+                    let tmp = self.memory.read_byte(self.regs.pc + 1)?;
                     self.memory.write_byte(self.regs.hl(), tmp)?;
                     (2, 3)
                 }
-                0x37 => { // SCF
+                0x37 => {
+                    // SCF
                     self.regs.set_flag(CpuFlag::N, false);
                     self.regs.set_flag(CpuFlag::H, false);
                     self.regs.set_flag(CpuFlag::C, true);
                     (1, 1)
                 }
-                0x38 => { // JR C,r8
+                0x38 => {
+                    // JR C,r8
                     if !self.regs.flag(CpuFlag::C) {
                         (2, 2)
                     } else {
@@ -430,41 +476,46 @@ impl Emulator {
                         (2, 3)
                     }
                 }
-                0x39 => { // ADD HL, SP
+                0x39 => {
+                    // ADD HL, SP
                     self.alu_add_hl(self.regs.sp);
                     (1, 2)
                 }
-                0x3A => { // LD A, (HL-)
+                0x3A => {
+                    // LD A, (HL-)
                     self.regs.a = self.memory.read_byte(self.regs.hl())?;
                     self.regs.set_hl(self.regs.hl().wrapping_sub(1));
                     (1, 2)
                 }
-                0x3B => { // DEC SP
+                0x3B => {
+                    // DEC SP
                     self.regs.sp = self.regs.sp.wrapping_sub(1);
                     (1, 2)
                 }
-                0x3C => { // INC A
+                0x3C => {
+                    // INC A
                     self.regs.a = self.alu_inc8(self.regs.a);
                     (1, 1)
                 }
-                0x3D => { // DEC A
+                0x3D => {
+                    // DEC A
                     self.regs.a = self.alu_dec8(self.regs.a);
                     (1, 1)
                 }
-                0x3E => { // LD A, d8
-                    self.regs.a = self.memory.read_byte(
-                        self.regs.pc + 1)?;
+                0x3E => {
+                    // LD A, d8
+                    self.regs.a = self.memory.read_byte(self.regs.pc + 1)?;
                     (2, 2)
                 }
-                0x3F => { // CCF
+                0x3F => {
+                    // CCF
                     self.regs.set_flag(CpuFlag::N, false);
                     self.regs.set_flag(CpuFlag::H, false);
-                    self.regs.set_flag(CpuFlag::C,
-                        !self.regs.flag(CpuFlag::C)
-                    );
+                    self.regs.set_flag(CpuFlag::C, !self.regs.flag(CpuFlag::C));
                     (1, 1)
                 }
-                0x40..=0x6F | 0x78..=0x7F => { // LD r8, r8
+                0x40..=0x6F | 0x78..=0x7F => {
+                    // LD r8, r8
                     // Match on the first three bytes
                     let src = match instr & 0x7 {
                         0x0 => self.regs.b,
@@ -475,7 +526,7 @@ impl Emulator {
                         0x5 => self.regs.l,
                         0x6 => self.memory.read_byte(self.regs.hl())?,
                         0x7 => self.regs.a,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     let dest = match instr & 0b11111000 {
                         0x40 => &mut self.regs.b,
@@ -485,12 +536,13 @@ impl Emulator {
                         0x60 => &mut self.regs.h,
                         0x68 => &mut self.regs.l,
                         0x78 => &mut self.regs.a,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     *dest = src;
                     (1, if instr & 0x7 == 0x6 { 2 } else { 1 })
-                },
-                0x70..=0x77 => { // LD (HL), r8
+                }
+                0x70..=0x77 => {
+                    // LD (HL), r8
                     let src = match instr & 0x7 {
                         0x0 => self.regs.b,
                         0x1 => self.regs.c,
@@ -500,7 +552,7 @@ impl Emulator {
                         0x5 => self.regs.l,
                         0x6 => return Err(VmExit::Halt),
                         0x7 => self.regs.a,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     self.memory.write_byte(self.regs.hl(), src)?;
                     (1, 2)
@@ -516,7 +568,7 @@ impl Emulator {
                         0x5 => self.regs.l,
                         0x6 => self.memory.read_byte(self.regs.hl())?,
                         0x7 => self.regs.a,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     match instr & 0b11111000 {
                         0x80 => self.alu_add(src),
@@ -527,11 +579,12 @@ impl Emulator {
                         0xA8 => self.alu_xor(src),
                         0xB0 => self.alu_or(src),
                         0xB8 => self.alu_cp(src),
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
                     (1, if instr & 0x7 == 0x6 { 2 } else { 1 })
                 }
-                0xC0 => { // RET NZ
+                0xC0 => {
+                    // RET NZ
                     if self.regs.flag(CpuFlag::Z) {
                         (1, 2)
                     } else {
@@ -539,46 +592,55 @@ impl Emulator {
                         (1, 5)
                     }
                 }
-                0xC1 => { // POP BC
+                0xC1 => {
+                    // POP BC
                     let bc = self.pop16()?;
                     self.regs.set_bc(bc);
                     (1, 3)
                 }
-                0xC2 => { // JP NZ, a16
+                0xC2 => {
+                    // JP NZ, a16
                     if self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
+                        self.regs.pc =
+                            self.memory.read_word(self.regs.pc + 1)?;
                         (3, 4)
                     }
                 }
-                0xC3 => { // JP a16
+                0xC3 => {
+                    // JP a16
                     self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                     (3, 4)
                 }
-                0xC4 => { // CALL NZ, a16
+                0xC4 => {
+                    // CALL NZ, a16
                     if self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc+2);
+                        self.push16(self.regs.pc + 2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
                 }
-                0xC5 => { // PUSH BC
+                0xC5 => {
+                    // PUSH BC
                     self.push16(self.regs.bc());
                     (1, 4)
                 }
-                0xC6 => { // ADD A, d8
+                0xC6 => {
+                    // ADD A, d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_add(src);
                     (2, 2)
                 }
-                0xC7 => { // RST 00h
+                0xC7 => {
+                    // RST 00h
                     self.regs.pc = 0;
                     (1, 4)
                 }
-                0xC8 => { // RET Z
+                0xC8 => {
+                    // RET Z
                     if !self.regs.flag(CpuFlag::Z) {
                         (1, 2)
                     } else {
@@ -586,19 +648,23 @@ impl Emulator {
                         (1, 5)
                     }
                 }
-                0xC9 => { // RET
+                0xC9 => {
+                    // RET
                     self.regs.pc = self.pop16()?;
                     (1, 4)
                 }
-                0xCA => { // JP Z,a16
+                0xCA => {
+                    // JP Z,a16
                     if !self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
+                        self.regs.pc =
+                            self.memory.read_word(self.regs.pc + 1)?;
                         (3, 4)
                     }
                 }
-                0xCB => { // PREFIX CB
+                0xCB => {
+                    // PREFIX CB
                     let subinstr = self.memory.read_byte(self.regs.pc + 1)?;
 
                     let get_src_reg = match subinstr & 0x7 {
@@ -608,12 +674,11 @@ impl Emulator {
                         0x3 => identity(|emu: &mut Emulator| &mut emu.regs.e),
                         0x4 => identity(|emu: &mut Emulator| &mut emu.regs.h),
                         0x5 => identity(|emu: &mut Emulator| &mut emu.regs.l),
-                        0x6 => identity(
-                            |emu: &mut Emulator|
+                        0x6 => identity(|emu: &mut Emulator| {
                             emu.memory.get_mut_ref_byte(emu.regs.hl()).unwrap()
-                        ),
+                        }),
                         0x7 => identity(|emu: &mut Emulator| &mut emu.regs.a),
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
 
                     match subinstr & 0b11111000 {
@@ -621,7 +686,7 @@ impl Emulator {
                         0x78 => {
                             let tmp = *get_src_reg(self);
                             self.bit(tmp, 7)
-                        },
+                        }
                         0x10 => self.alu_rl(get_src_reg),
                         0x30 => self.alu_swap(get_src_reg),
                         0x38 => self.alu_srl(get_src_reg),
@@ -657,38 +722,44 @@ impl Emulator {
                         0xF0 => set6,
                         0xF8 => set7,
                         */
-                        _ => panic!("Unimplemented for now {:04x} {:02x}",
+                        _ => panic!(
+                            "Unimplemented for now {:04x} {:02x}",
                             self.regs.pc,
                             self.memory.read_byte(self.regs.pc + 1)?
-                        )
+                        ),
                     }
 
                     (2, if subinstr & 0x7 == 0x6 { 4 } else { 2 })
                 }
-                0xCC => { // CALL Z,a16
+                0xCC => {
+                    // CALL Z,a16
                     if !self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc+2);
+                        self.push16(self.regs.pc + 2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
                 }
-                0xCD => { // CALL a16
-                    self.push16(self.regs.pc+2);
+                0xCD => {
+                    // CALL a16
+                    self.push16(self.regs.pc + 2);
                     self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                     (0, 6)
                 }
-                0xCE => { // ADC A,d8
+                0xCE => {
+                    // ADC A,d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_adc(src);
                     (2, 2)
                 }
-                0xCF => { // RST 08h
+                0xCF => {
+                    // RST 08h
                     self.regs.pc = 0x08;
                     (1, 4)
                 }
-                0xD0 => { // RET NC
+                0xD0 => {
+                    // RET NC
                     if self.regs.flag(CpuFlag::C) {
                         (1, 2)
                     } else {
@@ -696,42 +767,50 @@ impl Emulator {
                         (1, 5)
                     }
                 }
-                0xD1 => { // POP DE
+                0xD1 => {
+                    // POP DE
                     let de = self.pop16()?;
                     self.regs.set_de(de);
                     (1, 3)
                 }
-                0xD2 => { // JP NC, a16
+                0xD2 => {
+                    // JP NC, a16
                     if self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
+                        self.regs.pc =
+                            self.memory.read_word(self.regs.pc + 1)?;
                         (3, 4)
                     }
                 }
-                0xD4 => { // CALL NC, a16
+                0xD4 => {
+                    // CALL NC, a16
                     if self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc+2);
+                        self.push16(self.regs.pc + 2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
                 }
-                0xD5 => { // PUSH DE
+                0xD5 => {
+                    // PUSH DE
                     self.push16(self.regs.de());
                     (1, 4)
                 }
-                0xD6 => { // SUB d8
+                0xD6 => {
+                    // SUB d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_sub(src);
                     (2, 2)
                 }
-                0xD7 => { // RST 10h
+                0xD7 => {
+                    // RST 10h
                     self.regs.pc = 0x10;
                     (1, 4)
                 }
-                0xD8 => { // RET C
+                0xD8 => {
+                    // RET C
                     if !self.regs.flag(CpuFlag::C) {
                         (1, 2)
                     } else {
@@ -739,79 +818,91 @@ impl Emulator {
                         (1, 5)
                     }
                 }
-                0xD9 => { // RETI
+                0xD9 => {
+                    // RETI
                     self.regs.pc = self.pop16()?;
                     // TODO enable interrupts
                     (1, 4)
                 }
-                0xDA => { // JP C,a16
+                0xDA => {
+                    // JP C,a16
                     if !self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
+                        self.regs.pc =
+                            self.memory.read_word(self.regs.pc + 1)?;
                         (3, 4)
                     }
                 }
-                0xDC => { // CALL C,a16
+                0xDC => {
+                    // CALL C,a16
                     if !self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc+2);
+                        self.push16(self.regs.pc + 2);
                         self.regs.sp = self.regs.sp.wrapping_sub(2);
                         (0, 6)
                     }
                 }
-                0xDE => { // SBC A,d8
+                0xDE => {
+                    // SBC A,d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_sbc(src);
                     (2, 2)
                 }
-                0xDF => { // RST 18h
+                0xDF => {
+                    // RST 18h
                     self.regs.pc = 0x18;
                     (1, 4)
                 }
-                0xE0 => { // LDH (a8),A
-                    let address = self.memory
-                        .read_byte(self.regs.pc+1)? as u16 | 0xFF00;
+                0xE0 => {
+                    // LDH (a8),A
+                    let address = self.memory.read_byte(self.regs.pc + 1)?
+                        as u16
+                        | 0xFF00;
                     self.memory.write_byte(address, self.regs.a)?;
                     (2, 3)
                 }
-                0xE1 => { // POP HL
+                0xE1 => {
+                    // POP HL
                     let hl = self.pop16()?;
                     self.regs.set_hl(hl);
                     (1, 3)
                 }
-                0xE2 => { // LD (C), A
+                0xE2 => {
+                    // LD (C), A
                     let address = self.regs.c as u16 | 0xFF00;
                     self.memory.write_byte(address, self.regs.a)?;
                     (1, 2)
                 }
-                0xE5 => { // PUSH HL
+                0xE5 => {
+                    // PUSH HL
                     self.push16(self.regs.hl());
                     (1, 4)
                 }
-                0xE6 => { // AND d8
+                0xE6 => {
+                    // AND d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_and(src);
                     (2, 2)
                 }
-                0xE7 => { // RST 20h
+                0xE7 => {
+                    // RST 20h
                     self.regs.pc = 0x20;
                     (1, 4)
                 }
-                0xE8 => { // ADD SP,r8 add signed
+                0xE8 => {
+                    // ADD SP,r8 add signed
                     // TODO check if add signed changes smth
                     self.regs.set_flag(CpuFlag::N, false);
                     self.regs.set_flag(CpuFlag::Z, false);
                     let val = self.memory.read_byte(self.regs.pc + 1)?;
-                    if (val as usize + self.regs.sp as usize)
-                        >= 2usize.pow(8) {
+                    if (val as usize + self.regs.sp as usize) >= 2usize.pow(8) {
                         self.regs.set_flag(CpuFlag::C, true);
                     } else {
                         self.regs.set_flag(CpuFlag::C, false);
                     }
-                    if (val as usize + self.regs.sp as usize)
-                        >= 2usize.pow(4) {
+                    if (val as usize + self.regs.sp as usize) >= 2usize.pow(4) {
                         self.regs.set_flag(CpuFlag::H, true);
                     } else {
                         self.regs.set_flag(CpuFlag::H, false);
@@ -819,68 +910,78 @@ impl Emulator {
                     self.regs.sp = self.regs.sp.wrapping_add(val as u16);
                     (2, 4)
                 }
-                0xE9 => { // JP (HL)
+                0xE9 => {
+                    // JP (HL)
                     self.regs.pc = self.memory.read_word(self.regs.hl())?;
                     (1, 1)
                 }
-                0xEA => { // LD (a16), A
+                0xEA => {
+                    // LD (a16), A
                     let address = self.memory.read_word(self.regs.pc + 1)?;
                     self.memory.write_byte(address, self.regs.a)?;
                     (3, 4)
                 }
-                0xEE => { // XOR d8
+                0xEE => {
+                    // XOR d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_xor(src);
                     (2, 2)
                 }
-                0xEF => { // RST 28h
+                0xEF => {
+                    // RST 28h
                     self.regs.pc = 0x28;
                     (1, 4)
                 }
-                0xF0 => { // LDH A, (a8)
+                0xF0 => {
+                    // LDH A, (a8)
                     let tmp = self.memory.read_byte(self.regs.pc + 1)?;
                     self.regs.a = self.memory.read_byte(tmp as u16 | 0xFF00)?;
                     (2, 3)
                 }
-                0xF1 => { // POP AF
+                0xF1 => {
+                    // POP AF
                     let af = self.pop16()?;
                     self.regs.set_af(af);
                     (1, 3)
                 }
-                0xF2 => { // LD A,(C)
+                0xF2 => {
+                    // LD A,(C)
                     let address = self.regs.c as u16 | 0xFF00;
                     self.regs.a = self.memory.read_byte(address)?;
                     (1, 2)
                 }
-                0xF3 => { // DI
+                0xF3 => {
+                    // DI
                     // TODO DI
                     (1, 1)
                 }
-                0xF5 => { // PUSH AF
+                0xF5 => {
+                    // PUSH AF
                     self.push16(self.regs.af());
                     (1, 4)
                 }
-                0xF6 => { // OR d8
+                0xF6 => {
+                    // OR d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_or(src);
                     (2, 2)
                 }
-                0xF7 => { // RST 30h
+                0xF7 => {
+                    // RST 30h
                     self.regs.pc = 0x30;
                     (1, 4)
                 }
-                0xF8 => { // LD HL, SP+r8
+                0xF8 => {
+                    // LD HL, SP+r8
                     self.regs.set_flag(CpuFlag::N, false);
                     self.regs.set_flag(CpuFlag::Z, false);
                     let val = self.memory.read_byte(self.regs.pc + 1)?;
-                    if (val as usize + self.regs.sp as usize)
-                        >= 2usize.pow(8) {
+                    if (val as usize + self.regs.sp as usize) >= 2usize.pow(8) {
                         self.regs.set_flag(CpuFlag::C, true);
                     } else {
                         self.regs.set_flag(CpuFlag::C, false);
                     }
-                    if (val as usize + self.regs.sp as usize)
-                        >= 2usize.pow(4) {
+                    if (val as usize + self.regs.sp as usize) >= 2usize.pow(4) {
                         self.regs.set_flag(CpuFlag::H, true);
                     } else {
                         self.regs.set_flag(CpuFlag::H, false);
@@ -888,34 +989,39 @@ impl Emulator {
                     self.regs.set_hl(self.regs.sp.wrapping_add(val as u16));
                     (2, 3)
                 }
-                0xF9 => { // LD SP, HL
+                0xF9 => {
+                    // LD SP, HL
                     self.regs.sp = self.regs.hl();
                     (1, 2)
                 }
-                0xFA => { // LD A,(a16)
+                0xFA => {
+                    // LD A,(a16)
                     let address = self.memory.read_word(self.regs.pc + 1)?;
                     self.regs.a = self.memory.read_byte(address)?;
                     (3, 4)
                 }
-                0xFB => { // EI
+                0xFB => {
+                    // EI
                     // TODO EI
                     (1, 1)
                 }
-                0xFE => { // CP d8
+                0xFE => {
+                    // CP d8
                     let src = self.memory.read_byte(self.regs.pc + 1)?;
                     self.alu_cp(src);
                     (2, 2)
                 }
-                0xFF => { // RST 38h
+                0xFF => {
+                    // RST 38h
                     self.regs.pc = 0x38;
                     (1, 4)
                 }
                 _ => unreachable!("Unknown instruction {:02x}", instr),
             };
-            
+
             self.regs.pc += bytes_read;
 
-            self.memory.gpu.step(machine_cycles*4);
+            self.memory.gpu.step(machine_cycles * 4);
 
             // sleep (temporary hack)
             // thread::sleep(time::Duration::from_nanos(238*machine_cycles as u64));
@@ -943,7 +1049,7 @@ impl Emulator {
             self.regs.set_flag(CpuFlag::Z, true);
         } else {
             self.regs.set_flag(CpuFlag::Z, false);
-        } 
+        }
         if res & 0b11111 == 0b01111 {
             self.regs.set_flag(CpuFlag::H, true);
         }
@@ -952,14 +1058,12 @@ impl Emulator {
 
     fn alu_add_hl(&mut self, val: u16) {
         self.regs.set_flag(CpuFlag::N, false);
-        if (val as usize + self.regs.hl() as usize)
-            >= 2usize.pow(16) {
+        if (val as usize + self.regs.hl() as usize) >= 2usize.pow(16) {
             self.regs.set_flag(CpuFlag::C, true);
         } else {
             self.regs.set_flag(CpuFlag::C, false);
         }
-        if (val as usize + self.regs.hl() as usize)
-            >= 2usize.pow(12) {
+        if (val as usize + self.regs.hl() as usize) >= 2usize.pow(12) {
             self.regs.set_flag(CpuFlag::H, true);
         } else {
             self.regs.set_flag(CpuFlag::H, false);
@@ -977,14 +1081,12 @@ impl Emulator {
 
     fn alu_add(&mut self, val: u8) {
         self.regs.set_flag(CpuFlag::N, false);
-        if (val as usize + self.regs.a as usize)
-            >= 2usize.pow(8) {
+        if (val as usize + self.regs.a as usize) >= 2usize.pow(8) {
             self.regs.set_flag(CpuFlag::C, true);
         } else {
             self.regs.set_flag(CpuFlag::C, false);
         }
-        if (val as usize + self.regs.a as usize)
-            >= 2usize.pow(4) {
+        if (val as usize + self.regs.a as usize) >= 2usize.pow(4) {
             self.regs.set_flag(CpuFlag::H, true);
         } else {
             self.regs.set_flag(CpuFlag::H, false);
@@ -1010,8 +1112,7 @@ impl Emulator {
             self.regs.set_flag(CpuFlag::C, false);
         }
         // TODO half-carry is not good here
-        if (val as usize + self.regs.a as usize)
-            >= 2usize.pow(4) {
+        if (val as usize + self.regs.a as usize) >= 2usize.pow(4) {
             self.regs.set_flag(CpuFlag::H, true);
         } else {
             self.regs.set_flag(CpuFlag::H, false);
@@ -1067,8 +1168,7 @@ impl Emulator {
             self.regs.set_flag(CpuFlag::C, false);
         }
         // TODO half-carry is not good here
-        if (val as usize + self.regs.a as usize)
-            >= 2usize.pow(4) {
+        if (val as usize + self.regs.a as usize) >= 2usize.pow(4) {
             self.regs.set_flag(CpuFlag::H, true);
         } else {
             self.regs.set_flag(CpuFlag::H, false);
@@ -1081,8 +1181,10 @@ impl Emulator {
         }
     }
 
-    fn alu_rl<'a, F: FnMut(&mut Emulator) -> &mut u8>
-        (&'a  mut self, mut get_reg: F) {
+    fn alu_rl<'a, F: FnMut(&mut Emulator) -> &mut u8>(
+        &'a mut self,
+        mut get_reg: F,
+    ) {
         let zero_flag: bool;
         let old_carry = if self.regs.flag(CpuFlag::C) { 1 } else { 0 };
         let carry: bool;
@@ -1097,8 +1199,10 @@ impl Emulator {
         self.regs.set_flag(CpuFlag::Z, zero_flag);
     }
 
-    fn alu_swap<'a, F: FnMut(&mut Emulator) -> &mut u8>
-        (&'a  mut self, mut get_reg: F) {
+    fn alu_swap<'a, F: FnMut(&mut Emulator) -> &mut u8>(
+        &'a mut self,
+        mut get_reg: F,
+    ) {
         let zero_flag: bool;
         let val = get_reg(self);
         {
@@ -1109,9 +1213,11 @@ impl Emulator {
         self.regs.clear_flags();
         self.regs.set_flag(CpuFlag::Z, zero_flag);
     }
-    
-    fn alu_srl<'a, F: FnMut(&mut Emulator) -> &mut u8>
-        (&'a  mut self, mut get_reg: F) {
+
+    fn alu_srl<'a, F: FnMut(&mut Emulator) -> &mut u8>(
+        &'a mut self,
+        mut get_reg: F,
+    ) {
         let zero_flag: bool;
         let carry: bool;
         {
@@ -1127,12 +1233,13 @@ impl Emulator {
 
     fn pop16(&mut self) -> Result<u16, VmExit> {
         let res = self.memory.read_word(self.regs.sp)?;
+        // self.regs.sp = self.regs.sp.wrapping_add(2);
         self.regs.sp += 2;
         Ok(res)
     }
 
     fn push16(&mut self, val: u16) {
-        self.regs.sp -=2;
+        self.regs.sp -= 2;
         self.memory.write_word(self.regs.sp, val).unwrap();
     }
 

@@ -1,5 +1,7 @@
+use crate::emulator::VmExit;
+
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, Condvar};
+use std::sync::{Arc, Condvar, Mutex};
 
 pub const WIDTH: u32 = 160;
 pub const HEIGHT: u32 = 144;
@@ -8,7 +10,7 @@ pub const FRAME_LENGTH: usize = WIDTH as usize * HEIGHT as usize * 4;
 enum GpuMode {
     /// Horizontal blanking
     HBlank = 0,
-    
+
     /// Vertical blanking
     VBlank = 1,
 
@@ -27,8 +29,8 @@ pub struct Gpu {
     frame: [u8; FRAME_LENGTH],
     mode: GpuMode,
     modeclock: usize,
-    pub line: u8,
-    pub graphics_ram: Vec<u8>,
+    line: u8,
+    graphics_ram: Vec<u8>,
     scroll_x: u8,
     scroll_y: u8,
 }
@@ -49,13 +51,66 @@ impl Gpu {
         }
     }
 
-    pub fn sync(&mut self, channel: Sender<Box<[u8; FRAME_LENGTH]>>,
-        pair: Arc<(Mutex<bool>, Condvar)>) {
+    pub fn read_byte(&mut self, address: usize) -> Result<u8, VmExit> {
+        match address {
+            0x8000..=0x9FFF => Ok(self.graphics_ram[address - 0x8000]),
+            0xFE00..=0xFE9F => panic!("sprite data"),
+            0xFF41 => {
+                // STAT - LCDC Status (R/W)
+                Ok(1)
+            }
+            0xFF42 => {
+                // SCY - Scroll Y (R/W)
+                Ok(self.scroll_y)
+            }
+            0xFF44 => {
+                // LY - LCDC Y-Coordinate (R)
+                Ok(self.line)
+            }
+            _ => panic!("Trying to read at I/O 0x{:04x}", address),
+        }
+    }
+
+    pub fn write_byte(
+        &mut self,
+        address: usize,
+        val: u8,
+    ) -> Result<(), VmExit> {
+        match address {
+            0x8000..=0x9FFF => {
+                //print!("Writing 0x{:02x} at 0x{:04x}\n", val, address);
+                self.graphics_ram[address - 0x8000] = val;
+                Ok(())
+            }
+            0xFF40 => {
+                // LCDC - LCD Control (R/W)
+                // print!("LCD Control = 0b{:08b}\n", val);
+                Ok(())
+            }
+            0xFF42 => {
+                // SCY - Scroll Y (R/W)
+                self.scroll_y = val;
+                Ok(())
+            }
+            0xFF47 => {
+                // BGP - BG Palette Data (R/W) - Non CGB Mode Only
+                print!("BG Palette Data = 0b{:08b}\n", val);
+                Ok(())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn sync(
+        &mut self,
+        channel: Sender<Box<[u8; FRAME_LENGTH]>>,
+        pair: Arc<(Mutex<bool>, Condvar)>,
+    ) {
         self.pair = Some(pair);
         self.channel = Some(channel);
     }
 
-    pub fn step(&mut self, cycle_nb: usize) { 
+    pub fn step(&mut self, cycle_nb: usize) {
         self.modeclock += cycle_nb;
         match self.mode {
             GpuMode::OAMAccess => {
@@ -107,14 +162,6 @@ impl Gpu {
         }
     }
 
-    pub fn set_scroll_y(&mut self, val: u8) {
-        self.scroll_y = val;
-    }
-
-    pub fn get_scroll_y(&self) -> u8 {
-        self.scroll_y
-    }
-
     fn render_line(&mut self, line: u8) {
         let position_y = line.wrapping_add(self.scroll_y) as usize;
         let tile_row = (position_y / 8) * 32;
@@ -124,18 +171,17 @@ impl Gpu {
             let tile_address = 0x1800 + tile_row + tile_col;
             let tile_id = self.graphics_ram[tile_address] as usize;
             let tile_location = tile_id * 16;
-            let line_in_tile = (position_y % 8) * 2;            
+            let line_in_tile = (position_y % 8) * 2;
             let data = self.graphics_ram[tile_location + line_in_tile];
-            let color_bit = 7 - (position_x % 8);            
+            let color_bit = 7 - (position_x % 8);
             let val = (data >> color_bit) & 0b1;
             let val = val * 255;
             let val = [val, val, val, 0xff];
 
             let offset = (line as usize * WIDTH as usize + pixel as usize) * 4;
-            let pixel_in_frame = &mut self.frame[offset..offset+4];
+            let pixel_in_frame = &mut self.frame[offset..offset + 4];
             pixel_in_frame.copy_from_slice(&val);
         }
-       
     }
 
     fn render_frame(&mut self) {
@@ -145,8 +191,7 @@ impl Gpu {
                 let mut drawn = lock.lock().unwrap();
                 *drawn = false;
             }
-            let _ =  sender.send(Box::new(self.frame));
+            let _ = sender.send(Box::new(self.frame));
         }
     }
-
 }

@@ -1,12 +1,11 @@
 pub mod emulator;
-pub mod mmu;
 pub mod gpu;
-// pub mod renderer;
+pub mod mmu;
 
 use emulator::Emulator;
-use gpu::{WIDTH, HEIGHT, FRAME_LENGTH};
+use gpu::{FRAME_LENGTH, HEIGHT, WIDTH};
 
-use std::sync::{Arc, Mutex, Condvar, mpsc};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 
 use log::error;
@@ -14,10 +13,10 @@ use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::{WindowBuilder};
+use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const GRAPHICS_OUTPUT: bool = true;
+const GRAPHICS_OUTPUT: bool = false;
 
 fn main() {
     let mut emulator = Emulator::new();
@@ -47,7 +46,11 @@ fn main() {
 
         let mut pixels = {
             let window_size = window.inner_size();
-            let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+            let surface_texture = SurfaceTexture::new(
+                window_size.width,
+                window_size.height,
+                &window,
+            );
             Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
         };
 
@@ -65,7 +68,7 @@ fn main() {
                         let mut drawn = lock.lock().unwrap();
                         *drawn = true;
                         cvar.notify_one();
-                    },
+                    }
                     Err(_) => (),
                 }
 

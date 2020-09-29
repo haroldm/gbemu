@@ -131,6 +131,13 @@ impl Mmu {
                 }
                 Ok(())
             }
+            0xFF0F => { // IF - Interrupt Flag (R/W)
+                if val == 0 {
+                    Ok(())
+                } else {
+                    panic!("unhandled");
+                }
+            }
             _ => {
                 panic!("Trying to write 0x{:02x} to I/O 0x{:04x}", val, address)
             }

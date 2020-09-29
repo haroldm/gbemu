@@ -55,9 +55,20 @@ impl Gpu {
         match address {
             0x8000..=0x9FFF => Ok(self.graphics_ram[address - 0x8000]),
             0xFE00..=0xFE9F => panic!("sprite data"),
+            0xFF40 => { // LCDC - LCD Control (R/W)
+                Ok(0)
+            }
             0xFF41 => {
                 // STAT - LCDC Status (R/W)
-                Ok(1)
+                let mut res: u8 = 0;
+                let mode = match self.mode {
+                    GpuMode::HBlank => 0,
+                    GpuMode::VBlank => 1,
+                    GpuMode::OAMAccess => 2,
+                    GpuMode::VRAMAccess => 3,
+                };
+                res |= mode & 0b11;
+                Ok(res)
             }
             0xFF42 => {
                 // SCY - Scroll Y (R/W)
@@ -67,7 +78,7 @@ impl Gpu {
                 // LY - LCDC Y-Coordinate (R)
                 Ok(self.line)
             }
-            _ => panic!("Trying to read at I/O 0x{:04x}", address),
+            _ => panic!("Trying to read at GPU I/O 0x{:04x}", address),
         }
     }
 

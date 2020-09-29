@@ -589,7 +589,7 @@ impl Emulator {
                         (1, 2)
                     } else {
                         self.regs.pc = self.pop16()?;
-                        (1, 5)
+                        (0, 5)
                     }
                 }
                 0xC1 => {
@@ -619,7 +619,7 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.push16(self.regs.pc + 2);
-                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
                 }
@@ -645,13 +645,13 @@ impl Emulator {
                         (1, 2)
                     } else {
                         self.regs.pc = self.pop16()?;
-                        (1, 5)
+                        (0, 5)
                     }
                 }
                 0xC9 => {
                     // RET
                     self.regs.pc = self.pop16()?;
-                    (1, 4)
+                    (0, 4)
                 }
                 0xCA => {
                     // JP Z,a16
@@ -737,7 +737,7 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.push16(self.regs.pc + 2);
-                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
                 }
@@ -764,7 +764,7 @@ impl Emulator {
                         (1, 2)
                     } else {
                         self.regs.pc = self.pop16()?;
-                        (1, 5)
+                        (0, 5)
                     }
                 }
                 0xD1 => {
@@ -789,7 +789,7 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.push16(self.regs.pc + 2);
-                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
                 }
@@ -815,14 +815,14 @@ impl Emulator {
                         (1, 2)
                     } else {
                         self.regs.pc = self.pop16()?;
-                        (1, 5)
+                        (0, 5)
                     }
                 }
                 0xD9 => {
                     // RETI
                     self.regs.pc = self.pop16()?;
                     // TODO enable interrupts
-                    (1, 4)
+                    (0, 4)
                 }
                 0xDA => {
                     // JP C,a16
@@ -840,7 +840,7 @@ impl Emulator {
                         (3, 3)
                     } else {
                         self.push16(self.regs.pc + 2);
-                        self.regs.sp = self.regs.sp.wrapping_sub(2);
+                        self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
                 }
@@ -1020,11 +1020,7 @@ impl Emulator {
             };
 
             self.regs.pc += bytes_read;
-
             self.memory.gpu.step(machine_cycles * 4);
-
-            // sleep (temporary hack)
-            // thread::sleep(time::Duration::from_nanos(238*machine_cycles as u64));
         }
     }
 

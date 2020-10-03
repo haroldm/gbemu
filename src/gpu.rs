@@ -33,6 +33,7 @@ pub struct Gpu {
     graphics_ram: Vec<u8>,
     scroll_x: u8,
     scroll_y: u8,
+    pub interrupt_flags: u8,
 }
 
 impl Gpu {
@@ -48,6 +49,7 @@ impl Gpu {
             graphics_ram: vec![0; 8192],
             scroll_x: 0,
             scroll_y: 0,
+            interrupt_flags: 0,
         }
     }
 
@@ -98,9 +100,22 @@ impl Gpu {
                 // print!("LCD Control = 0b{:08b}\n", val);
                 Ok(())
             }
+            0xFF41 => {
+                // STAT - LCDC Status (R/W)
+                if val == 0 {
+                    Ok(())
+                } else {
+                    panic!("unhandled write to LCDC status")
+                }
+            }
             0xFF42 => {
                 // SCY - Scroll Y (R/W)
                 self.scroll_y = val;
+                Ok(())
+            }
+            0xFF43 => {
+                // SCX - Scroll X (R/W)
+                self.scroll_x = val;
                 Ok(())
             }
             0xFF47 => {
@@ -108,7 +123,27 @@ impl Gpu {
                 print!("BG Palette Data = 0b{:08b}\n", val);
                 Ok(())
             }
-            _ => unreachable!(),
+            0xFF48 => {
+                // OBP0 - Object Palette 0 Data (R/W)
+                print!("Object Palette 0 Data = 0b{:08b}\n", val);
+                Ok(())
+            }
+            0xFF49 => {
+                // OBP1 - Object Palette 1 Data (R/W)
+                print!("Object Palette 1 Data = 0b{:08b}\n", val);
+                Ok(())
+            }
+            0xFF4A => {
+                // WY - Window Y Position (R/W)
+                print!("Window Y Position = 0b{:08b}\n", val);
+                Ok(())
+            }
+            0xFF4B => {
+                // WX - Window X Position minus 7 (R/W)
+                print!("Window X Position minus 7 = 0b{:08b}\n", val);
+                Ok(())
+            }
+            _ =>  panic!("Trying to write at GPU I/O 0x{:04x}", address),
         }
     }
 
@@ -144,6 +179,7 @@ impl Gpu {
                     self.line += 1;
 
                     if self.line == 143 {
+                        self.interrupt_flags |= 0x01;
                         self.mode = GpuMode::VBlank;
                         // Block thread until previous frame is rendered
                         if let Some(pair) = &self.pair {

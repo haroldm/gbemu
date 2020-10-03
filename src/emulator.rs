@@ -1,4 +1,5 @@
-// use std::{thread, time};
+use std::fmt;
+
 use crate::mmu::Mmu;
 
 /// Function that makes a closure use same lifetime elision rules as a function
@@ -16,6 +17,8 @@ pub enum CpuFlag {
     N = 0b01000000,
     Z = 0b10000000,
 }
+
+#[derive(Debug)]
 pub struct Registers {
     a: u8,
     b: u8,
@@ -117,6 +120,15 @@ pub enum VmExit {
 
     /// VM exited after an out of bounds read
     OobRead,
+
+    /// VM exited after SP overflowed
+    SpOverflow,
+}
+
+impl fmt::Display for Emulator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x?}", self.regs)
+    }
 }
 
 impl Emulator {
@@ -142,7 +154,7 @@ impl Emulator {
         loop {
             let instr = self.memory.read_byte(self.regs.pc)?;
 
-            // print!("Executing instruction at 0x{:04x}\n", self.regs.pc);
+            // print!("0x{:04x}\n", self.regs.pc);
 
             // Decode the instruction and return number of bytes read
             let (bytes_read, machine_cycles) = match instr {
@@ -605,20 +617,20 @@ impl Emulator {
                     } else {
                         self.regs.pc =
                             self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 4)
+                        (0, 4)
                     }
                 }
                 0xC3 => {
                     // JP a16
                     self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
-                    (3, 4)
+                    (0, 4)
                 }
                 0xC4 => {
                     // CALL NZ, a16
                     if self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc + 2);
+                        self.push16(self.regs.pc + 3);
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
@@ -660,7 +672,7 @@ impl Emulator {
                     } else {
                         self.regs.pc =
                             self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 4)
+                        (0, 4)
                     }
                 }
                 0xCB => {
@@ -690,7 +702,7 @@ impl Emulator {
                         0x10 => self.alu_rl(get_src_reg),
                         0x30 => self.alu_swap(get_src_reg),
                         0x38 => self.alu_srl(get_src_reg),
-
+                        0xF8 => *get_src_reg(self) |= 0b10000000,
                         /*
                         0x08 => rrc,
                         0x10 => rl,
@@ -736,14 +748,14 @@ impl Emulator {
                     if !self.regs.flag(CpuFlag::Z) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc + 2);
+                        self.push16(self.regs.pc + 3);
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
                 }
                 0xCD => {
                     // CALL a16
-                    self.push16(self.regs.pc + 2);
+                    self.push16(self.regs.pc + 3);
                     self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                     (0, 6)
                 }
@@ -780,7 +792,7 @@ impl Emulator {
                     } else {
                         self.regs.pc =
                             self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 4)
+                        (0, 4)
                     }
                 }
                 0xD4 => {
@@ -788,7 +800,7 @@ impl Emulator {
                     if self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc + 2);
+                        self.push16(self.regs.pc + 3);
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
@@ -831,7 +843,7 @@ impl Emulator {
                     } else {
                         self.regs.pc =
                             self.memory.read_word(self.regs.pc + 1)?;
-                        (3, 4)
+                        (0, 4)
                     }
                 }
                 0xDC => {
@@ -839,7 +851,7 @@ impl Emulator {
                     if !self.regs.flag(CpuFlag::C) {
                         (3, 3)
                     } else {
-                        self.push16(self.regs.pc + 2);
+                        self.push16(self.regs.pc + 3);
                         self.regs.pc = self.memory.read_word(self.regs.pc + 1)?;
                         (0, 6)
                     }
@@ -913,7 +925,7 @@ impl Emulator {
                 0xE9 => {
                     // JP (HL)
                     self.regs.pc = self.memory.read_word(self.regs.hl())?;
-                    (1, 1)
+                    (0, 1)
                 }
                 0xEA => {
                     // LD (a16), A
@@ -1021,6 +1033,9 @@ impl Emulator {
 
             self.regs.pc += bytes_read;
             self.memory.gpu.step(machine_cycles * 4);
+
+            self.memory.interrupt_flags |= self.memory.gpu.interrupt_flags;
+            self.memory.gpu.interrupt_flags = 0;
         }
     }
 
@@ -1229,9 +1244,16 @@ impl Emulator {
 
     fn pop16(&mut self) -> Result<u16, VmExit> {
         let res = self.memory.read_word(self.regs.sp)?;
+
         // self.regs.sp = self.regs.sp.wrapping_add(2);
-        self.regs.sp += 2;
-        Ok(res)
+        // Ok(res)
+        match self.regs.sp.checked_add(2) {
+            Some(x) => {
+                self.regs.sp = x;
+                Ok(res)
+            },
+            None => Err(VmExit::SpOverflow),
+        }
     }
 
     fn push16(&mut self, val: u16) {

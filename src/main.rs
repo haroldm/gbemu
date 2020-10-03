@@ -16,10 +16,11 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const GRAPHICS_OUTPUT: bool = false;
+const GRAPHICS_OUTPUT: bool = true;
 
 fn main() {
     let mut emulator = Emulator::new();
+    // emulator.memory.load_rom("roms/Mario's Picross (UE) [S][!].gb");
     emulator.memory.load_rom("roms/tetris.gb");
 
     if GRAPHICS_OUTPUT {
@@ -102,6 +103,9 @@ fn main() {
             }
         });
     } else {
-        emulator.run().unwrap();
+        match emulator.run() {
+            Ok(_) => println!("Should not happen"),
+            Err(e) => println!("{:?} {}", e, emulator),
+        };
     }
 }
